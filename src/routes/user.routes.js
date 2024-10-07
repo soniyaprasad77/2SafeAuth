@@ -2,7 +2,6 @@ import { Router } from "express";
 import { check } from "express-validator";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
-
 import {
   registerUser,
   loginUser,
@@ -13,6 +12,8 @@ import {
   updateAccountDetails,
   setup2FA,
   verifyOTP,
+  logoutFromSession,
+  getActiveSessions,
 } from "../controllers/user.controller.js";
 import { toggle2FA } from "../controllers/user.controller.js";
 
@@ -41,10 +42,12 @@ router
     ],
     loginUser
   );
-router.route("/enable-2fa").post( verifyJWT, setup2FA);
+router.route("/enable-2fa").post(verifyJWT, setup2FA);
 router.route("/verify-otp").post(verifyJWT, verifyOTP);
 router.route("/toggle-2fa").post(verifyJWT, toggle2FA);
 router.route("/logout").post(verifyJWT, logoutUser);
+router.route("/get-sessions").get(verifyJWT, getActiveSessions);
+router.route("/sessions/:sessionId").delete(verifyJWT, logoutFromSession);
 router.route("/refresh-token").post(refreshAccessToken);
 router.route("/change-password").post(verifyJWT, changeCurrentPassword);
 router.route("/current-user").get(verifyJWT, getCurrentUser);

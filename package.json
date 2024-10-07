@@ -23,6 +23,7 @@
     "mongoose": "^8.7.0",
     "nodemon": "^3.1.7",
     "qrcode": "^1.5.4",
-    "speakeasy": "^2.0.0"
+    "speakeasy": "^2.0.0",
+    "useragent": "^2.3.0"
   }
 }

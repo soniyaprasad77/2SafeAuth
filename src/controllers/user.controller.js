@@ -1,11 +1,13 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
+import { Session } from "../models/session.model.js"; // Import the session model
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { validationResult } from "express-validator";
 import speakeasy from "speakeasy";
 import qrcode from "qrcode";
 import jwt from "jsonwebtoken";
+import useragent from "useragent";
 const generateAccessAndRefreshTokens = async (userId) => {
   const user = await User.findById(userId);
   const accessToken = user.generateAccessToken();
@@ -123,6 +125,16 @@ const loginUser = asyncHandler(async (req, res) => {
   const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
     user._id
   );
+  const userAgent = useragent.parse(req.headers["user-agent"]);
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  // Create a new session
+  await Session.create({
+    userId: user._id,
+    deviceType: userAgent.device.toString(),
+    browser: userAgent.toAgent(),
+    ipAddress,
+  });
 
   // Fetch the user without password and refreshToken fields
   const loggedInUser = await User.findById(user._id).select(
@@ -151,6 +163,29 @@ const loginUser = asyncHandler(async (req, res) => {
         "User Logged in Successfully"
       )
     );
+});
+const getActiveSessions = asyncHandler(async (req, res) => {
+  const sessions = await Session.find({ userId: req.user.id, isActive: true });
+  res.status(200).json({
+    status: "success",
+    sessions,
+  });
+});
+const logoutFromSession = asyncHandler(async (req, res) => {
+  const sessionId = req.params.sessionId;
+  const session = await Session.findById(sessionId);
+
+  if (!session || session.userId.toString() !== req.user.id) {
+    return res.status(404).json({ message: "Session not found" });
+  }
+
+  session.isActive = false;
+  await session.save();
+
+  res.status(200).json({
+    status: "success",
+    message: "Session terminated successfully",
+  });
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
@@ -363,4 +398,6 @@ export {
   setup2FA,
   verifyOTP,
   toggle2FA,
+  getActiveSessions,
+  logoutFromSession,
 };
