@@ -2,6 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { validationResult } from "express-validator";
 import jwt from "jsonwebtoken";
 const generateAccessAndRefreshTokens = async (userId) => {
   const user = await User.findById(userId);
@@ -20,7 +21,11 @@ const registerUser = asyncHandler(async (req, res) => {
   // remove password and refresh token field from response
   // check for user creation
   // return res
-  console.log(req.body);
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
   const { fullName, email, username, password } = req.body;
 
   console.log("email: ", email);
@@ -65,6 +70,11 @@ const loginUser = asyncHandler(async (req, res) => {
     5. access and refresh token
     6. send cookie
     */
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
   const { username, password, email } = req.body;
 
   if (!username && !email) {
