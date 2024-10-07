@@ -18,6 +18,8 @@ const userSchema = new Schema(
       lowercase: true,
       trim: true,
     },
+    twoFactorEnabled: { type: Boolean, default: false },
+    twoFactorSecret: { type: String },
     fullName: {
       type: String,
       required: true,
