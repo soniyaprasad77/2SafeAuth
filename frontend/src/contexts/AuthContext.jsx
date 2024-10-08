@@ -1,12 +1,12 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-
+import React, { createContext, useState, useContext, useEffect } from "react";
+import { BASE_URL } from "../utils/constants";
 
 const AuthContext = createContext(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
@@ -17,46 +17,126 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     // Check if user is logged in
     const checkLoggedIn = async () => {
-      try {
-        const response = await fetch('/api/user');
-        if (response.ok) {
-          const user = await response.json();
-          setCurrentUser(user);
-        }
-      } catch (error) {
-        console.error('Failed to check login status', error);
-      }
+      fetch(`${BASE_URL}/api/v1/users/current-user`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+      })
+        .then((res) => res.json())
+        .then((res) => {
+          if (res.success) {
+            setCurrentUser(res.data);
+          }
+        })
+        .catch((err) => console.log(err));
     };
 
     checkLoggedIn();
   }, []);
 
-  const login = async (email, password) => {
-    // Implement login logic here
+  const login = (username, email, password) => {
+    fetch(`${BASE_URL}/api/v1/users/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, email, password }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setCurrentUser(data.data.user);
+
+          localStorage.setItem("accessToken", data.data.accessToken);
+          localStorage.setItem("refreshToken", data.data.refreshToken);
+        }
+      })
+      .catch((err) => console.log(err));
   };
 
-  const signup = async (email, password) => {
-    // Implement signup logic here
+  const signup = (username, fullName, email, password) => {
+    fetch(`${BASE_URL}/api/v1/users/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, fullName, email, password }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log(data);
+        if (data.status === "success") {
+          setCurrentUser(data.data.user);
+        }
+      })
+      .catch((err) => console.log(err));
   };
 
   const logout = async () => {
-    // Implement logout logic here
+    fetch(`${BASE_URL}/api/v1/users/logout`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+      },
+    }).then((res) => {
+      if (res.status === 200) {
+        setCurrentUser(null);
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
+      }
+    });
   };
 
-  const verifyOtp = async (otp) => {
-    // Implement OTP verification logic here
+  const verifyOtp = async (username, token) => {
+    fetch(`${BASE_URL}/api/v1/users/verify-otp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+      },
+      body: JSON.stringify({ username, token }),
+    });
+  }
+
+  const setup2FA = (username, token) => {
+    fetch(`${BASE_URL}/api/v1/users/verify-otp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+      },
+      body: JSON.stringify({ username, token }),
+    }).then(() => {
+      fetch(`${BASE_URL}/api/v1/users/toggle-2fa`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+        body: JSON.stringify({ username }),
+      });
+    });
   };
 
-  const setup2FA = async (verificationCode) => {
-    // Implement 2FA setup logic here
-  };
-
-  const disable2FA = async () => {
-    // Implement 2FA disable logic here
+  const disable2FA = (username) => {
+    fetch(`${BASE_URL}/api/v1/users/toggle-2fa`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+      },
+      body: JSON.stringify({ username }),
+    });
   };
 
   const terminateSession = async (sessionId) => {
-    // Implement session termination logic here
+    fetch(`${BASE_URL}/api/v1/users/sessions/${sessionId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+      },
+    });
   };
 
   const value = {

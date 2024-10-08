@@ -76,93 +76,114 @@ const loginUser = asyncHandler(async (req, res) => {
       7. send cookie
       */
 
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-
-  const { username, password, email, token } = req.body;
-
-  if (!username && !email) {
-    throw new ApiError(400, "Username or email is required");
-  }
-
-  // Find the user by username or email
-  const user = await User.findOne({
-    $or: [{ username }, { email }],
-  });
-
-  if (!user) {
-    throw new ApiError(400, "User does not exist");
-  }
-
-  // Check if the password is valid
-  const isPasswordValid = await user.isPasswordCorrect(password);
-  if (!isPasswordValid) {
-    throw new ApiError(400, "Invalid User Credentials");
-  }
-
-  // Check if 2FA is enabled for this user
-  if (user.twoFactorEnabled) {
-    if (!token) {
-      // If 2FA is enabled and no OTP is provided, return an error
-      throw new ApiError(400, "Two-factor authentication token is required");
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
     }
 
-    // Verify the OTP token using speakeasy
-    const isOtpValid = speakeasy.totp.verify({
-      secret: user.twoFactorSecret, // Stored 2FA secret
-      encoding: "base32",
-      token, // OTP token from the request body
+    const { username, password, email, token } = req.body;
+
+    if (!username && !email) {
+      throw new ApiError(400, "Username or email is required");
+    }
+
+    // Find the user by username or email
+    const user = await User.findOne({
+      $or: [{ username }, { email }],
     });
 
-    if (!isOtpValid) {
-      throw new ApiError(400, "Invalid 2FA token");
+    if (!user) {
+      throw new ApiError(400, "User does not exist");
     }
-  }
 
-  // Generate access and refresh tokens
-  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
-    user._id
-  );
-  const userAgent = useragent.parse(req.headers["user-agent"]);
-  const ipAddress = req.ip || req.connection.remoteAddress;
+    // Check if the password is valid
+    const isPasswordValid = await user.isPasswordCorrect(password);
+    if (!isPasswordValid) {
+      throw new ApiError(400, "Invalid User Credentials");
+    }
 
-  // Create a new session
-  await Session.create({
-    userId: user._id,
-    deviceType: userAgent.device.toString(),
-    browser: userAgent.toAgent(),
-    ipAddress,
-  });
-
-  // Fetch the user without password and refreshToken fields
-  const loggedInUser = await User.findById(user._id).select(
-    "-password -refreshToken"
-  );
-
-  // Set cookie options
-  const options = {
-    httpOnly: true,
-    secure: true,
-  };
-
-  // Send access token and refresh token in cookies and return user data
-  res
-    .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
-    .json(
-      new ApiResponse(
-        200,
-        {
-          user: loggedInUser,
-          accessToken,
-          refreshToken,
-        },
-        "User Logged in Successfully"
-      )
+    // Generate access and refresh tokens
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+      user._id
     );
+    const userAgent = useragent.parse(req.headers["user-agent"]);
+    const ipAddress = req.ip || req.connection.remoteAddress;
+
+    // Create a new session
+    await Session.create({
+      userId: user._id,
+      deviceType: userAgent.device.toString(),
+      browser: userAgent.toAgent(),
+      ipAddress,
+    });
+
+    // Fetch the user without password and refreshToken fields
+    const loggedInUser = await User.findById(user._id).select(
+      "-password -refreshToken"
+    );
+
+    // Set cookie options
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+
+    // Send access token and refresh token in cookies and return user data
+    res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .json(
+        new ApiResponse(
+          200,
+          {
+            user: loggedInUser,
+            accessToken,
+            refreshToken,
+          },
+          "User Logged in Successfully"
+        )
+      );
+  } catch (error) {
+    throw new ApiError(500, error.message || "Internal Server Error");
+  }
+});
+const validateOTP = asyncHandler(async (req, res) => {
+  try {
+    const { username, token } = req.body;
+
+    if (!username) {
+      throw new ApiError(400, "Username is required");
+    }
+
+    // Find the user by username or email
+    const user = await User.findOne({ username });
+
+    if (!user) {
+      throw new ApiError(400, "User does not exist");
+    }
+    // Check if 2FA is enabled for this user
+    if (user.twoFactorEnabled) {
+      if (!token) {
+        // If 2FA is enabled and no OTP is provided, return an error
+        throw new ApiError(400, "Two-factor authentication token is required");
+      }
+
+      // Verify the OTP token using speakeasy
+      const isOtpValid = speakeasy.totp.verify({
+        secret: user.twoFactorSecret, // Stored 2FA secret
+        encoding: "base32",
+        token, // OTP token from the request body
+      });
+
+      if (!isOtpValid) {
+        throw new ApiError(400, "Invalid 2FA token");
+      }
+    }
+  } catch (error) {
+    throw new ApiError(500, error.message || "Internal Server Error");
+  }
 });
 const getActiveSessions = asyncHandler(async (req, res) => {
   const sessions = await Session.find({ userId: req.user.id, isActive: true });
@@ -243,7 +264,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     };
 
     const { accessToken, newRefreshToken } =
-      await generateAccessAndRefereshTokens(user._id);
+      await generateAccessAndRefreshTokens(user._id);
 
     return res
       .status(200)
@@ -264,18 +285,22 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 // for changing current password
 
 const changeCurrentPassword = asyncHandler(async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
-  const user = await User.findById(req.user?._id);
-  const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
-  if (!isPasswordCorrect) {
-    throw new ApiError(400, "Invalid Old Password");
-  }
-  user.password = newPassword;
-  await user.save({ validateBeforeSave: false });
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const user = await User.findById(req.user?._id);
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+    if (!isPasswordCorrect) {
+      throw new ApiError(400, "Invalid Old Password");
+    }
+    user.password = newPassword;
+    await user.save({ validateBeforeSave: false });
 
-  return res
-    .status(200)
-    .json(new ApiResponse(200, {}, "Password changed successfully"));
+    return res
+      .status(200)
+      .json(new ApiResponse(200, {}, "Password changed successfully"));
+  } catch (error) {
+    throw new ApiError(500, error.message || "Internal Server Error");
+  }
 });
 
 // get current user
@@ -286,24 +311,29 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
-  const { fullName, email } = req.body;
-  if (!fullName || !email) {
-    throw new ApiError(400, "All feilds are required");
-  }
+  try {
+    const { fullName, email } = req.body;
+    if (!fullName || !email) {
+      throw new ApiError(400, "All fields are required");
+    }
 
-  const user = await User.findByIdAndUpdate(
-    req.user?._id,
-    {
-      $set: {
-        fullName,
-        email: email,
+    const user = await User.findByIdAndUpdate(
+      req.user?._id,
+      {
+        $set: {
+          fullName,
+          email: email,
+        },
       },
-    },
-    { new: true }
-  ).select("-password");
-  return res
-    .status(200)
-    .json(new ApiResponse(200, user, "Account Details updated Successfully"));
+      { new: true }
+    ).select("-password");
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, user, "Account Details updated Successfully"));
+  } catch (error) {
+    throw new ApiError(500, error.message || "Internal Server Error");
+  }
 });
 const setup2FA = asyncHandler(async (req, res) => {
   const { username } = req.body;
@@ -400,4 +430,5 @@ export {
   toggle2FA,
   getActiveSessions,
   logoutFromSession,
+  validateOTP
 };

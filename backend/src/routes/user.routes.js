@@ -14,6 +14,7 @@ import {
   verifyOTP,
   logoutFromSession,
   getActiveSessions,
+  validateOTP,
 } from "../controllers/user.controller.js";
 import { toggle2FA } from "../controllers/user.controller.js";
 
@@ -44,6 +45,7 @@ router
   );
 router.route("/enable-2fa").post(verifyJWT, setup2FA);
 router.route("/verify-otp").post(verifyJWT, verifyOTP);
+router.route("/validate-otp").post(verifyJWT, validateOTP);
 router.route("/toggle-2fa").post(verifyJWT, toggle2FA);
 router.route("/logout").post(verifyJWT, logoutUser);
 router.route("/get-sessions").get(verifyJWT, getActiveSessions);

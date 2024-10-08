@@ -6,12 +6,13 @@ const OtpVerification = () => {
     const [otp, setOtp] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
-    const { verifyOtp } = useAuth();
+    const { verifyOtp, currentUser } = useAuth();
+    
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await verifyOtp(otp);
+            await verifyOtp(currentUser.username,otp);
             navigate('/profile');
         } catch (err) {
             setError('Invalid OTP');
