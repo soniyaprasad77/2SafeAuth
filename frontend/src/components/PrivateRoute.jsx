@@ -1,11 +1,9 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 
 const PrivateRoute = ({ element }) => {
-  const { currentUser } = useAuth();
-
-  return currentUser ? element : <Navigate to="/login" />;
+  const accessToken = localStorage.getItem("accessToken")
+  return accessToken ? element : <Navigate to="/login" />;
 };
 
 export default PrivateRoute;
